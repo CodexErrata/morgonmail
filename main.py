@@ -170,9 +170,10 @@ def filter_news(articles):
             messages=[{
                 "role": "user",
                 "content": (
-                    "You are an extremely selective news filter. Return ONLY the numbers of articles to KEEP.\n\n"
-                    "SELECTION RULES:\n\n"
-                    "1. GEOPOLITICS — keep only events genuinely major on a global scale:\n"
+                    "You are an extremely selective news filter.\n\n"
+                    "Respond in exactly this format:\n"
+                    "geo:1,3,5 top:7\n\n"
+                    "GEOPOLITICS (geo): keep only events genuinely major on a global scale:\n"
                     "   - Active military strikes, invasions, or significant escalations between states\n"
                     "   - A country's government falling, coup, or major political crisis\n"
                     "   - Nuclear developments\n"
@@ -180,21 +181,34 @@ def filter_news(articles):
                     "   - Declarations of war or peace\n"
                     "   - Massive sanctions or blockades with global economic impact\n"
                     "   Exclude: talks/meetings, threats, speculation, human interest, anything merely 'developing'\n"
-                    "   Source limits: at most 2 from Reuters, at most 2 from Svenska Dagbladet, at most 1 from Aftonbladet.\n\n"
-                    "2. TOP STORY — exactly 1 additional article: the single most important or widely discussed "
-                    "headline today, any topic. Skip if it would duplicate a geopolitics pick.\n\n"
-                    "Respond with only comma-separated numbers. Example: 2,5,11\n\n"
-                    f"Articles:\n{numbered}\n\nNumbers to keep:"
+                    "   Source limits: at most 2 from Reuters, at most 2 from Svenska Dagbladet, at most 1 from Aftonbladet.\n"
+                    "   If none qualify, write geo:none\n\n"
+                    "TOP STORY (top): exactly 1 article — the single most important or widely discussed headline "
+                    "today, any topic, any source. Must be different from geo picks. Always include one.\n\n"
+                    f"Articles:\n{numbered}\n\nResponse:"
                 ),
             }],
         )
         raw = resp.content[0].text.strip()
-        if raw.lower() == "none":
-            return []
-        indices = [int(x.strip()) - 1 for x in raw.split(",") if x.strip().isdigit()]
-        kept = [articles[i] for i in indices if 0 <= i < len(articles)]
-        kept = _apply_source_caps(kept)
-        log.info(f"  Claude kept {len(kept)} / {len(articles)} articles")
+        geo_indices, top_index = [], None
+
+        for part in raw.split():
+            if part.startswith("geo:") and part[4:].lower() != "none":
+                geo_indices = [int(x) - 1 for x in part[4:].split(",") if x.strip().isdigit()]
+            elif part.startswith("top:") and part[4:].lower() != "none":
+                top_parts = [x for x in part[4:].split(",") if x.strip().isdigit()]
+                if top_parts:
+                    top_index = int(top_parts[0]) - 1
+
+        geo = _apply_source_caps([articles[i] for i in geo_indices if 0 <= i < len(articles)])
+        top = [articles[top_index]] if top_index is not None and 0 <= top_index < len(articles) else []
+
+        # avoid duplicate
+        geo_links = {a["link"] for a in geo}
+        top = [a for a in top if a["link"] not in geo_links]
+
+        kept = geo + top
+        log.info(f"  Claude kept {len(geo)} geo + {len(top)} top = {len(kept)} articles")
         return kept
     except Exception as e:
         log.warning(f"  Claude filter failed ({e}), returning all articles unfiltered.")
