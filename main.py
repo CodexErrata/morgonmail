@@ -22,8 +22,9 @@ from googleapiclient.discovery import build
 
 from config import (
     RECIPIENT_EMAIL, NEWS_SOURCES, BLOG_SOURCES, MAX_ARTICLES_PER_SOURCE,
-    CREDENTIALS_FILE, TOKEN_FILE, TASKS_FILE, LOG_FILE,
+    CREDENTIALS_FILE, TOKEN_FILE, LOG_FILE,
     TIMEZONE, GOOGLE_SCOPES, WEATHER_LAT, WEATHER_LON,
+    NOTION_PRESSING_PAGE_ID, NOTION_LONGTERM_PAGE_ID,
 )
 
 logging.basicConfig(
@@ -262,36 +263,54 @@ def format_event_time(event):
 
 
 # ---------------------------------------------------------------------------
-# Tasks
+# Notion
 # ---------------------------------------------------------------------------
 
-def get_tasks():
-    if not TASKS_FILE.exists():
-        return ""
-    return TASKS_FILE.read_text(encoding="utf-8").strip()
+def _notion_get_text(rich_text_list):
+    return "".join(rt.get("plain_text", "") for rt in rich_text_list)
 
 
-def render_tasks_html(md):
-    if not md:
-        return '<p>no tasks</p>'
-    lines = md.splitlines()
+def fetch_notion_page(page_id):
+    import urllib.request as _ur, json as _json
+    api_key = os.environ.get("NOTION_API_KEY")
+    if not api_key or not page_id:
+        return "<p>not configured</p>"
+    try:
+        url = f"https://api.notion.com/v1/blocks/{page_id}/children?page_size=100"
+        req = _ur.Request(url, headers={
+            "Authorization": f"Bearer {api_key}",
+            "Notion-Version": "2022-06-28",
+        })
+        with _ur.urlopen(req, timeout=10) as r:
+            data = _json.loads(r.read())
+        return _render_notion_blocks(data.get("results", []))
+    except Exception as e:
+        log.warning(f"Notion fetch failed ({page_id}): {e}")
+        return "<p>failed to load</p>"
+
+
+def _render_notion_blocks(blocks):
     parts = []
-    for line in lines:
-        if line.startswith("# "):
-            parts.append(f'<h3 style="margin:10px 0 4px;">{line[2:]}</h3>')
-        elif line.startswith("## "):
-            parts.append(f'<h4 style="margin:8px 0 3px;">{line[3:]}</h4>')
-        elif line.startswith("- [x] ") or line.startswith("- [X] "):
-            parts.append(f'<div style="margin:3px 0;text-decoration:line-through;">☑ {line[6:]}</div>')
-        elif line.startswith("- [ ] "):
-            parts.append(f'<div style="margin:3px 0;">☐ {line[6:]}</div>')
-        elif line.startswith("- "):
-            parts.append(f'<div style="margin:3px 0;">• {line[2:]}</div>')
-        elif line.strip():
-            parts.append(f'<div style="margin:3px 0;">{line}</div>')
-        else:
-            parts.append("<br>")
-    return "\n".join(parts)
+    for b in blocks:
+        t = b["type"]
+        d = b.get(t, {})
+        text = _notion_get_text(d.get("rich_text", []))
+        if t == "to_do":
+            checked = d.get("checked", False)
+            style = "text-decoration:line-through;" if checked else ""
+            mark  = "☑" if checked else "☐"
+            parts.append(f'<div style="margin:3px 0;{style}">{mark} {text}</div>')
+        elif t == "bulleted_list_item":
+            parts.append(f'<div style="margin:3px 0;">• {text}</div>')
+        elif t == "numbered_list_item":
+            parts.append(f'<div style="margin:3px 0;">{text}</div>')
+        elif t in ("heading_1", "heading_2", "heading_3"):
+            parts.append(f'<div style="margin:10px 0 3px;font-weight:bold;">{text}</div>')
+        elif t == "paragraph" and text:
+            parts.append(f'<div style="margin:3px 0;">{text}</div>')
+        elif t == "divider":
+            parts.append('<div style="margin:6px 0;">—</div>')
+    return "\n".join(parts) if parts else "<p>empty</p>"
 
 
 # ---------------------------------------------------------------------------
@@ -307,7 +326,7 @@ SECTION = f"""
            border-bottom:1px solid {BLACK};font-family:{FONT};">{{title}}</h2>
 """
 
-def build_html(articles, blog_posts, events, tasks_md, date_str, weather):
+def build_html(articles, blog_posts, events, pressing_html, longterm_html, date_str, weather):
     # --- Weather ---
     if weather:
         weather_html = (
@@ -365,8 +384,6 @@ def build_html(articles, blog_posts, events, tasks_md, date_str, weather):
     else:
         blogs_html = f'<p style="color:{BLACK};">no new posts</p>'
 
-    tasks_html = render_tasks_html(tasks_md)
-
     return f"""<html><body style="font-family:{FONT};max-width:600px;margin:0 auto;padding:28px 24px;color:{BLACK};">
   <h1 style="font-size:18px;margin:0 0 2px;font-weight:normal;font-family:{FONT};">morgonmail</h1>
   <p style="font-size:12px;margin:0 0 0;color:{BLACK};">{date_str}</p>
@@ -383,8 +400,11 @@ def build_html(articles, blog_posts, events, tasks_md, date_str, weather):
   {SECTION.format(title="today")}
   {cal_html}
 
-  {SECTION.format(title="tasks")}
-  {tasks_html}
+  {SECTION.format(title="pressing")}
+  {pressing_html}
+
+  {SECTION.format(title="long term")}
+  {longterm_html}
 
 </body></html>"""
 
@@ -425,15 +445,16 @@ def main():
     events = get_today_events(creds)
     log.info(f"  {len(events)} event(s) today")
 
-    log.info("Reading tasks...")
-    tasks = get_tasks()
+    log.info("Fetching Notion pages...")
+    pressing_html = fetch_notion_page(NOTION_PRESSING_PAGE_ID)
+    longterm_html = fetch_notion_page(NOTION_LONGTERM_PAGE_ID)
 
     tz       = pytz.timezone(TIMEZONE)
     now      = datetime.now(tz)
     date_str = now.strftime("%A, %-d %B %Y")
     subject  = f"Morgonmail – {now.strftime('%-d %b')}"
 
-    html = build_html(filtered, blog_posts, events, tasks, date_str, weather)
+    html = build_html(filtered, blog_posts, events, pressing_html, longterm_html, date_str, weather)
 
     log.info("Sending email...")
     send_email(creds, recipient, subject, html)

@@ -20,9 +20,12 @@ BLOG_SOURCES = [
 # Max articles to fetch per source before Claude filters them
 MAX_ARTICLES_PER_SOURCE = 25
 
+# Notion page IDs — get these from the page URLs (last part after the title)
+NOTION_PRESSING_PAGE_ID  = ""
+NOTION_LONGTERM_PAGE_ID  = ""
+
 CREDENTIALS_FILE = SCRIPT_DIR / "credentials.json"
 TOKEN_FILE       = SCRIPT_DIR / "token.json"
-TASKS_FILE       = SCRIPT_DIR / "tasks.md"
 LOG_FILE         = SCRIPT_DIR / "morgonmail.log"
 
 TIMEZONE = "Asia/Ho_Chi_Minh"
