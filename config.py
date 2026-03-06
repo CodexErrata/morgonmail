@@ -11,6 +11,12 @@ NEWS_SOURCES = [
     {"name": "Aftonbladet",         "rss": "https://rss.aftonbladet.se/rss2/small/pages/sections/senastenytt/"},
 ]
 
+BLOG_SOURCES = [
+    {"name": "Gwern",            "rss": "https://www.gwern.net/atom.xml"},
+    {"name": "Astral Codex Ten", "rss": "https://astralcodexten.substack.com/feed"},
+    {"name": "Richard Hanania",  "rss": "https://www.richardhanania.com/feed"},
+]
+
 # Max articles to fetch per source before Claude filters them
 MAX_ARTICLES_PER_SOURCE = 25
 

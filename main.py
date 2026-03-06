@@ -21,7 +21,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
 from config import (
-    RECIPIENT_EMAIL, NEWS_SOURCES, MAX_ARTICLES_PER_SOURCE,
+    RECIPIENT_EMAIL, NEWS_SOURCES, BLOG_SOURCES, MAX_ARTICLES_PER_SOURCE,
     CREDENTIALS_FILE, TOKEN_FILE, TASKS_FILE, LOG_FILE,
     TIMEZONE, GOOGLE_SCOPES,
 )
@@ -151,6 +151,32 @@ def filter_news(articles):
 
 
 # ---------------------------------------------------------------------------
+# Blogs
+# ---------------------------------------------------------------------------
+
+def fetch_new_blog_posts():
+    """Return blog posts published in the last 24 hours."""
+    import time
+    cutoff = time.time() - 24 * 3600
+    new_posts = []
+    for source in BLOG_SOURCES:
+        try:
+            feed = feedparser.parse(source["rss"])
+            for entry in feed.entries:
+                published = entry.get("published_parsed") or entry.get("updated_parsed")
+                if published and time.mktime(published) >= cutoff:
+                    new_posts.append({
+                        "source": source["name"],
+                        "title":  entry.get("title", "Untitled").strip(),
+                        "link":   entry.get("link", ""),
+                    })
+        except Exception as e:
+            log.warning(f"  Failed to fetch {source['name']}: {e}")
+    log.info(f"  {len(new_posts)} new blog post(s) in the last 24h")
+    return new_posts
+
+
+# ---------------------------------------------------------------------------
 # Calendar
 # ---------------------------------------------------------------------------
 
@@ -230,7 +256,7 @@ SECTION = """
            border-bottom:2px solid #f0f0f0;">{title}</h2>
 """
 
-def build_html(articles, events, tasks_md, date_str):
+def build_html(articles, blog_posts, events, tasks_md, date_str):
     # --- News ---
     if articles:
         news_items = []
@@ -273,6 +299,20 @@ def build_html(articles, events, tasks_md, date_str):
     else:
         cal_html = '<p style="color:#999;">Nothing on the calendar today.</p>'
 
+    # --- Blogs ---
+    if blog_posts:
+        blog_items = []
+        for p in blog_posts:
+            blog_items.append(
+                f'<div style="margin-bottom:8px;">'
+                f'<span style="font-size:10px;color:#aaa;text-transform:uppercase;">{p["source"]}</span> '
+                f'<a href="{p["link"]}" style="color:#111;text-decoration:none;">{p["title"]}</a>'
+                f'</div>'
+            )
+        blogs_html = "\n".join(blog_items)
+    else:
+        blogs_html = '<p style="color:#999;">No new posts.</p>'
+
     tasks_html = render_tasks_html(tasks_md)
 
     return f"""<html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
@@ -282,6 +322,9 @@ def build_html(articles, events, tasks_md, date_str):
 
   {SECTION.format(title="News")}
   {news_html}
+
+  {SECTION.format(title="Blogs")}
+  {blogs_html}
 
   {SECTION.format(title="Today")}
   {cal_html}
@@ -319,6 +362,9 @@ def main():
     log.info(f"Filtering {len(articles)} articles with Claude...")
     filtered = filter_news(articles)
 
+    log.info("Fetching blog posts...")
+    blog_posts = fetch_new_blog_posts()
+
     log.info("Reading calendar...")
     events = get_today_events(creds)
     log.info(f"  {len(events)} event(s) today")
@@ -331,7 +377,7 @@ def main():
     date_str = now.strftime("%A, %-d %B %Y")
     subject  = f"Morgonmail – {now.strftime('%-d %b')}"
 
-    html = build_html(filtered, events, tasks, date_str)
+    html = build_html(filtered, blog_posts, events, tasks, date_str)
 
     log.info("Sending email...")
     send_email(creds, recipient, subject, html)
