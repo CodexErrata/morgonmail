@@ -21,8 +21,8 @@ BLOG_SOURCES = [
 MAX_ARTICLES_PER_SOURCE = 25
 
 # Notion page IDs — get these from the page URLs (last part after the title)
-NOTION_PRESSING_PAGE_ID  = ""
-NOTION_LONGTERM_PAGE_ID  = ""
+NOTION_PRESSING_PAGE_ID  = "31b99631355d807683bdc656c177818b"
+NOTION_LONGTERM_PAGE_ID  = "31b99631355d8015a8fae26743b4bf60"
 
 CREDENTIALS_FILE = SCRIPT_DIR / "credentials.json"
 TOKEN_FILE       = SCRIPT_DIR / "token.json"
