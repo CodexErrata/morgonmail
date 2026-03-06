@@ -131,6 +131,20 @@ def fetch_news():
     return articles
 
 
+SOURCE_CAPS = {"Reuters": 2, "Svenska Dagbladet": 2, "Aftonbladet": 1}
+
+def _apply_source_caps(articles):
+    from collections import defaultdict
+    counts = defaultdict(int)
+    result = []
+    for a in articles:
+        cap = SOURCE_CAPS.get(a["source"], 99)
+        if counts[a["source"]] < cap:
+            result.append(a)
+            counts[a["source"]] += 1
+    return result
+
+
 def filter_news(articles):
     """Use Claude Haiku to keep only major geopolitical/political events."""
     if not articles:
@@ -157,19 +171,18 @@ def filter_news(articles):
                 "content": (
                     "You are an extremely selective news filter. Return ONLY the numbers of articles to KEEP.\n\n"
                     "SELECTION RULES:\n\n"
-                    "1. GEOPOLITICS (keep up to 6): only events that are genuinely major on a global scale:\n"
+                    "1. GEOPOLITICS — keep only events genuinely major on a global scale:\n"
                     "   - Active military strikes, invasions, or significant escalations between states\n"
                     "   - A country's government falling, coup, or major political crisis\n"
                     "   - Nuclear developments\n"
                     "   - Major international agreements or total breakdown of diplomacy\n"
                     "   - Declarations of war or peace\n"
                     "   - Massive sanctions or blockades with global economic impact\n"
-                    "   Exclude: talks/meetings, threats, speculation, human interest, anything merely 'developing'\n\n"
-                    "2. TOP STORY (keep exactly 1): the single most important or widely discussed headline today, "
-                    "any topic — science, tech, business, culture, anything. Pick whichever story the most people "
-                    "will be talking about today. Skip this if it would duplicate a geopolitics pick.\n\n"
-                    "Respond with only comma-separated numbers. If nothing qualifies for geopolitics, still include the top story. "
-                    "Example: 2,5,11\n\n"
+                    "   Exclude: talks/meetings, threats, speculation, human interest, anything merely 'developing'\n"
+                    "   Source limits: at most 2 from Reuters, at most 2 from Svenska Dagbladet, at most 1 from Aftonbladet.\n\n"
+                    "2. TOP STORY — exactly 1 additional article: the single most important or widely discussed "
+                    "headline today, any topic. Skip if it would duplicate a geopolitics pick.\n\n"
+                    "Respond with only comma-separated numbers. Example: 2,5,11\n\n"
                     f"Articles:\n{numbered}\n\nNumbers to keep:"
                 ),
             }],
@@ -179,6 +192,7 @@ def filter_news(articles):
             return []
         indices = [int(x.strip()) - 1 for x in raw.split(",") if x.strip().isdigit()]
         kept = [articles[i] for i in indices if 0 <= i < len(articles)]
+        kept = _apply_source_caps(kept)
         log.info(f"  Claude kept {len(kept)} / {len(articles)} articles")
         return kept
     except Exception as e:
@@ -259,7 +273,7 @@ def get_tasks():
 
 def render_tasks_html(md):
     if not md:
-        return '<p style="color:#999;">No tasks.</p>'
+        return '<p>no tasks</p>'
     lines = md.splitlines()
     parts = []
     for line in lines:
@@ -268,9 +282,7 @@ def render_tasks_html(md):
         elif line.startswith("## "):
             parts.append(f'<h4 style="margin:8px 0 3px;">{line[3:]}</h4>')
         elif line.startswith("- [x] ") or line.startswith("- [X] "):
-            parts.append(
-                f'<div style="margin:3px 0;color:#aaa;text-decoration:line-through;">☑ {line[6:]}</div>'
-            )
+            parts.append(f'<div style="margin:3px 0;text-decoration:line-through;">☑ {line[6:]}</div>')
         elif line.startswith("- [ ] "):
             parts.append(f'<div style="margin:3px 0;">☐ {line[6:]}</div>')
         elif line.startswith("- "):
@@ -286,103 +298,94 @@ def render_tasks_html(md):
 # Email composition
 # ---------------------------------------------------------------------------
 
-SECTION = """
+FONT  = "'Söhne Mono', 'SohneMono', ui-monospace, 'Cascadia Mono', 'SF Mono', monospace"
+BLACK = "#000"
+
+SECTION = f"""
 <h2 style="font-size:11px;text-transform:uppercase;letter-spacing:1.5px;
-           color:#999;margin:32px 0 14px;padding-bottom:8px;
-           border-bottom:2px solid #f0f0f0;">{title}</h2>
+           color:{BLACK};margin:32px 0 12px;padding-bottom:6px;
+           border-bottom:1px solid {BLACK};font-family:{FONT};">{{title}}</h2>
 """
 
 def build_html(articles, blog_posts, events, tasks_md, date_str, weather):
     # --- Weather ---
     if weather:
         weather_html = (
-            f'<p style="margin:0;color:#333;">'
+            f'<p style="margin:0;color:{BLACK};">'
             f'sunrise: {weather["sunrise"]} &nbsp;·&nbsp; sunset: {weather["sunset"]}<br>'
             f'{weather["desc"]} &nbsp;·&nbsp; {weather["min"]}–{weather["max"]}°C'
             f'</p>'
         )
     else:
-        weather_html = '<p style="color:#999;">Unavailable.</p>'
+        weather_html = f'<p style="color:{BLACK};">unavailable</p>'
 
     # --- News ---
     if articles:
         news_items = []
         for a in articles:
-            summary_html = (
-                f'<p style="font-size:13px;color:#666;margin:4px 0 0;">'
-                f'{a["summary"][:220]}…</p>'
-                if a["summary"] else ""
-            )
             news_items.append(
-                f'<div style="margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid #f0f0f0;">'
-                f'<span style="font-size:10px;color:#aaa;text-transform:uppercase;">{a["source"]}</span><br>'
-                f'<a href="{a["link"]}" style="font-size:15px;font-weight:600;color:#111;text-decoration:none;">'
+                f'<div style="margin-bottom:10px;">'
+                f'<span style="font-size:10px;color:{BLACK};text-transform:uppercase;">{a["source"]}</span><br>'
+                f'<a href="{a["link"]}" style="color:{BLACK};text-decoration:none;">'
                 f'{a["title"]}</a>'
-                f'{summary_html}'
                 f'</div>'
             )
         news_html = "\n".join(news_items)
     else:
-        news_html = '<p style="color:#999;">No major geopolitical news today.</p>'
+        news_html = f'<p style="color:{BLACK};">no major news today</p>'
 
     # --- Calendar ---
     if events:
         cal_items = []
         for ev in events:
-            time_str  = format_event_time(ev)
-            title     = ev.get("summary", "Untitled")
-            location  = ev.get("location", "")
-            loc_html  = (
-                f' <span style="font-size:12px;color:#aaa;">@ {location}</span>'
-                if location else ""
-            )
+            time_str = format_event_time(ev)
+            title    = ev.get("summary", "Untitled")
+            location = ev.get("location", "")
+            loc_str  = f" @ {location}" if location else ""
             cal_items.append(
-                f'<div style="margin-bottom:8px;">'
-                f'<span style="font-weight:600;color:#333;min-width:100px;display:inline-block;">{time_str}</span>'
-                f'<span style="color:#111;">{title}</span>{loc_html}'
+                f'<div style="margin-bottom:6px;color:{BLACK};">'
+                f'{time_str} &nbsp; {title}{loc_str}'
                 f'</div>'
             )
         cal_html = "\n".join(cal_items)
     else:
-        cal_html = '<p style="color:#999;">Nothing on the calendar today.</p>'
+        cal_html = f'<p style="color:{BLACK};">nothing scheduled</p>'
 
     # --- Blogs ---
     if blog_posts:
         blog_items = []
         for p in blog_posts:
             blog_items.append(
-                f'<div style="margin-bottom:8px;">'
-                f'<span style="font-size:10px;color:#aaa;text-transform:uppercase;">{p["source"]}</span> '
-                f'<a href="{p["link"]}" style="color:#111;text-decoration:none;">{p["title"]}</a>'
+                f'<div style="margin-bottom:6px;">'
+                f'<span style="font-size:10px;color:{BLACK};text-transform:uppercase;">{p["source"]}</span><br>'
+                f'<a href="{p["link"]}" style="color:{BLACK};text-decoration:none;">{p["title"]}</a>'
                 f'</div>'
             )
         blogs_html = "\n".join(blog_items)
     else:
-        blogs_html = '<p style="color:#999;">No new posts.</p>'
+        blogs_html = f'<p style="color:{BLACK};">no new posts</p>'
 
     tasks_html = render_tasks_html(tasks_md)
 
-    return f"""<html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-                      max-width:620px;margin:0 auto;padding:28px 24px;color:#111;">
-  <h1 style="font-size:24px;margin:0 0 2px;font-weight:700;">Morgonmail</h1>
-  <p style="color:#aaa;font-size:13px;margin:0 0 0;">{date_str}</p>
+    return f"""<html><body style="font-family:{FONT};max-width:600px;margin:0 auto;padding:28px 24px;color:{BLACK};">
+  <h1 style="font-size:18px;margin:0 0 2px;font-weight:normal;font-family:{FONT};">morgonmail</h1>
+  <p style="font-size:12px;margin:0 0 0;color:{BLACK};">{date_str}</p>
 
-  {SECTION.format(title="Weather")}
+  {SECTION.format(title="weather")}
   {weather_html}
 
-  {SECTION.format(title="News")}
+  {SECTION.format(title="news")}
   {news_html}
 
-  {SECTION.format(title="Blogs")}
+  {SECTION.format(title="blogs")}
   {blogs_html}
 
-  {SECTION.format(title="Today")}
+  {SECTION.format(title="today")}
   {cal_html}
 
-  {SECTION.format(title="Tasks")}
+  {SECTION.format(title="tasks")}
   {tasks_html}
 
-  <p style="margin-top:40px;font-size:11px;color:#ccc;">morgonmail</p>
 </body></html>"""
 
 
