@@ -117,19 +117,30 @@ def filter_news(articles):
             messages=[{
                 "role": "user",
                 "content": (
-                    "You are a strict news filter. Return ONLY the numbers of articles to KEEP.\n\n"
-                    "KEEP: geopolitics, wars, military conflicts, major government decisions, "
-                    "elections, coups, international relations, sanctions, major treaties, "
-                    "large-scale crises with geopolitical significance.\n\n"
-                    "REMOVE: human interest / personal stories, sports, entertainment, lifestyle, "
-                    "business/economics (unless macro-level), local crime, opinion pieces, "
-                    "any story focused on individual people's suffering or emotions.\n\n"
-                    "Respond with only comma-separated numbers. Example: 2,5,11\n\n"
+                    "You are an extremely selective news filter for someone who only wants the most significant world events. "
+                    "Return ONLY the numbers of articles to KEEP. Return at most 6 articles — fewer if the news is quiet.\n\n"
+                    "KEEP only events that are genuinely major on a global scale:\n"
+                    "- Active military strikes, invasions, or significant escalations between states\n"
+                    "- A country's government falling, coup, or major political crisis\n"
+                    "- Nuclear developments\n"
+                    "- Major international agreements or total breakdown of diplomacy\n"
+                    "- Declarations of war or peace\n"
+                    "- Massive sanctions or blockades with global economic impact\n\n"
+                    "REMOVE everything else, including:\n"
+                    "- Diplomatic meetings, talks, negotiations, or statements (unless a deal is actually signed)\n"
+                    "- Elections unless a result has been decided and is significant\n"
+                    "- Threats, warnings, or speculation about future events\n"
+                    "- Human interest, personal stories, casualties/survivor stories\n"
+                    "- Business, markets, sports, entertainment, crime, opinion\n"
+                    "- Anything that is merely 'developing' without a concrete event having occurred\n\n"
+                    "Respond with only comma-separated numbers. If nothing qualifies, respond with: none\n\n"
                     f"Articles:\n{numbered}\n\nNumbers to keep:"
                 ),
             }],
         )
         raw = resp.content[0].text.strip()
+        if raw.lower() == "none":
+            return []
         indices = [int(x.strip()) - 1 for x in raw.split(",") if x.strip().isdigit()]
         kept = [articles[i] for i in indices if 0 <= i < len(articles)]
         log.info(f"  Claude kept {len(kept)} / {len(articles)} articles")
