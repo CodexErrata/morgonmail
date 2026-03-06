@@ -6,7 +6,7 @@ SCRIPT_DIR = Path(__file__).parent
 RECIPIENT_EMAIL = ""
 
 NEWS_SOURCES = [
-    {"name": "Reuters",             "rss": "https://feeds.reuters.com/reuters/worldNews"},
+    {"name": "Reuters",             "rss": "https://news.google.com/rss/search?q=when:24h+allinurl:reuters.com&ceid=US:en&hl=en-US&gl=US"},
     {"name": "Svenska Dagbladet",   "rss": "https://www.svd.se/feed/articles.rss"},
     {"name": "Aftonbladet",         "rss": "https://rss.aftonbladet.se/rss2/small/pages/sections/senastenytt/"},
 ]
