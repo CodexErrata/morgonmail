@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.user.morgonmail</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/Thompson/Desktop/morgonmail/venv/bin/python3</string>
+        <string>/Users/Thompson/Desktop/morgonmail/main.py</string>
+    </array>
+
+    <!-- 10:00 AM every day (in the system's local timezone — set your Mac to Asia/Ho_Chi_Minh) -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>   <integer>10</integer>
+        <key>Minute</key> <integer>0</integer>
+    </dict>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>ANTHROPIC_API_KEY</key>
+        <string>PASTE_YOUR_KEY_HERE</string>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/Thompson/Desktop/morgonmail/morgonmail.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/Thompson/Desktop/morgonmail/morgonmail.error.log</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>

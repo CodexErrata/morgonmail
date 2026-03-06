@@ -1,0 +1,32 @@
+name: morgonmail
+
+on:
+  schedule:
+    - cron: '0 3 * * *'   # 03:00 UTC = 10:00 Vietnam time (UTC+7)
+  workflow_dispatch:        # allows manual trigger from GitHub UI
+
+jobs:
+  send-briefing:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Write Google credentials from secrets
+        run: |
+          echo '${{ secrets.GOOGLE_CREDENTIALS_JSON }}' > credentials.json
+          echo '${{ secrets.GOOGLE_TOKEN_JSON }}'       > token.json
+
+      - name: Run morgonmail
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python main.py
