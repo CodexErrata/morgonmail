@@ -27,6 +27,10 @@ LOG_FILE         = SCRIPT_DIR / "morgonmail.log"
 
 TIMEZONE = "Asia/Ho_Chi_Minh"
 
+# Location for weather — update when you travel (decimal degrees)
+WEATHER_LAT = 10.8231   # Ho Chi Minh City
+WEATHER_LON = 106.6297
+
 GOOGLE_SCOPES = [
     "https://www.googleapis.com/auth/gmail.send",
     "https://www.googleapis.com/auth/gmail.readonly",

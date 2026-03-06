@@ -23,7 +23,7 @@ from googleapiclient.discovery import build
 from config import (
     RECIPIENT_EMAIL, NEWS_SOURCES, BLOG_SOURCES, MAX_ARTICLES_PER_SOURCE,
     CREDENTIALS_FILE, TOKEN_FILE, TASKS_FILE, LOG_FILE,
-    TIMEZONE, GOOGLE_SCOPES,
+    TIMEZONE, GOOGLE_SCOPES, WEATHER_LAT, WEATHER_LON,
 )
 
 logging.basicConfig(
@@ -35,6 +35,44 @@ logging.basicConfig(
     ],
 )
 log = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Weather
+# ---------------------------------------------------------------------------
+
+WMO_CODES = {
+    0: "clear", 1: "mainly clear", 2: "partly cloudy", 3: "overcast",
+    45: "foggy", 48: "icy fog",
+    51: "light drizzle", 53: "drizzle", 55: "heavy drizzle",
+    61: "light rain", 63: "rain", 65: "heavy rain",
+    71: "light snow", 73: "snow", 75: "heavy snow",
+    80: "showers", 81: "heavy showers", 82: "violent showers",
+    95: "thunderstorm", 96: "thunderstorm with hail", 99: "thunderstorm with heavy hail",
+}
+
+def fetch_weather():
+    import urllib.request, json as _json
+    try:
+        url = (
+            f"https://api.open-meteo.com/v1/forecast"
+            f"?latitude={WEATHER_LAT}&longitude={WEATHER_LON}"
+            f"&daily=weathercode,sunrise,sunset,temperature_2m_max,temperature_2m_min"
+            f"&timezone={TIMEZONE}"
+            f"&forecast_days=1"
+        )
+        with urllib.request.urlopen(url, timeout=10) as r:
+            data = _json.loads(r.read())
+        daily   = data["daily"]
+        sunrise = datetime.fromisoformat(daily["sunrise"][0]).strftime("%H:%M")
+        sunset  = datetime.fromisoformat(daily["sunset"][0]).strftime("%H:%M")
+        desc    = WMO_CODES.get(daily["weathercode"][0], "unknown")
+        t_max   = round(daily["temperature_2m_max"][0])
+        t_min   = round(daily["temperature_2m_min"][0])
+        return {"desc": desc, "sunrise": sunrise, "sunset": sunset, "max": t_max, "min": t_min}
+    except Exception as e:
+        log.warning(f"Weather fetch failed: {e}")
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -256,7 +294,18 @@ SECTION = """
            border-bottom:2px solid #f0f0f0;">{title}</h2>
 """
 
-def build_html(articles, blog_posts, events, tasks_md, date_str):
+def build_html(articles, blog_posts, events, tasks_md, date_str, weather):
+    # --- Weather ---
+    if weather:
+        weather_html = (
+            f'<p style="margin:0;color:#333;">'
+            f'sunrise: {weather["sunrise"]} &nbsp;·&nbsp; sunset: {weather["sunset"]}<br>'
+            f'{weather["desc"]} &nbsp;·&nbsp; {weather["min"]}–{weather["max"]}°C'
+            f'</p>'
+        )
+    else:
+        weather_html = '<p style="color:#999;">Unavailable.</p>'
+
     # --- News ---
     if articles:
         news_items = []
@@ -320,6 +369,9 @@ def build_html(articles, blog_posts, events, tasks_md, date_str):
   <h1 style="font-size:24px;margin:0 0 2px;font-weight:700;">Morgonmail</h1>
   <p style="color:#aaa;font-size:13px;margin:0 0 0;">{date_str}</p>
 
+  {SECTION.format(title="Weather")}
+  {weather_html}
+
   {SECTION.format(title="News")}
   {news_html}
 
@@ -362,6 +414,9 @@ def main():
     log.info(f"Filtering {len(articles)} articles with Claude...")
     filtered = filter_news(articles)
 
+    log.info("Fetching weather...")
+    weather = fetch_weather()
+
     log.info("Fetching blog posts...")
     blog_posts = fetch_new_blog_posts()
 
@@ -377,7 +432,7 @@ def main():
     date_str = now.strftime("%A, %-d %B %Y")
     subject  = f"Morgonmail – {now.strftime('%-d %b')}"
 
-    html = build_html(filtered, blog_posts, events, tasks, date_str)
+    html = build_html(filtered, blog_posts, events, tasks, date_str, weather)
 
     log.info("Sending email...")
     send_email(creds, recipient, subject, html)
