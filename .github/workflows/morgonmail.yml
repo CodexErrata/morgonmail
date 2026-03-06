@@ -23,11 +23,11 @@ jobs:
 
       - name: Write Google credentials from secrets
         env:
-          CREDS: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
-          TOKEN: ${{ secrets.GOOGLE_TOKEN_JSON }}
+          CREDS_B64: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+          TOKEN_B64: ${{ secrets.GOOGLE_TOKEN_JSON }}
         run: |
-          printf '%s' "$CREDS" > credentials.json
-          printf '%s' "$TOKEN" > token.json
+          echo "$CREDS_B64" | base64 -d > credentials.json
+          echo "$TOKEN_B64" | base64 -d > token.json
 
       - name: Run morgonmail
         env:
