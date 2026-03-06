@@ -22,9 +22,12 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Write Google credentials from secrets
+        env:
+          CREDS: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+          TOKEN: ${{ secrets.GOOGLE_TOKEN_JSON }}
         run: |
-          echo '${{ secrets.GOOGLE_CREDENTIALS_JSON }}' > credentials.json
-          echo '${{ secrets.GOOGLE_TOKEN_JSON }}'       > token.json
+          printf '%s' "$CREDS" > credentials.json
+          printf '%s' "$TOKEN" > token.json
 
       - name: Run morgonmail
         env:
