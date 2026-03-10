@@ -2,7 +2,7 @@ name: morgonmail
 
 on:
   schedule:
-    - cron: '0 3 * * *'   # 03:00 UTC = 10:00 Vietnam time (UTC+7)
+    - cron: '0 23 * * *'  # 23:00 UTC = 06:00 Vietnam time (UTC+7)
   workflow_dispatch:        # allows manual trigger from GitHub UI
 
 jobs:
